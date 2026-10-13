@@ -352,6 +352,11 @@
     $("date").value = new Date().toLocaleDateString("en-CA");
     $("month").value = new Date().toLocaleDateString("en-CA").slice(0, 7);
     render();
-  </script>
+  if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js")
+      .catch(error => console.error("Erro no cache:", error));
+  });
+</script>
 </body>
 </html>
