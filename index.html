@@ -1,0 +1,357 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#123c35">
+  <meta name="description" content="Seu gerenciador financeiro pessoal">
+  <link rel="manifest" href="manifest.json">
+  <title>Meu Controle</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #f3f6f4;
+      color: #19342d;
+      font-family: Arial, sans-serif;
+    }
+
+    header {
+      background: #123c35;
+      color: white;
+      padding: 24px 18px;
+      border-radius: 0 0 24px 24px;
+    }
+
+    header h1 { margin: 0 0 6px; font-size: 25px; }
+    header p { margin: 0; color: #c9e4d8; }
+
+    main {
+      width: min(100% - 28px, 720px);
+      margin: 20px auto;
+    }
+
+    .card {
+      background: white;
+      padding: 18px;
+      border-radius: 16px;
+      margin-bottom: 15px;
+      box-shadow: 0 3px 14px #183b3010;
+    }
+
+    .balance {
+      background: #1d5749;
+      color: white;
+    }
+
+    .balance small { color: #cce6d9; }
+    .balance h2 { font-size: 30px; margin: 10px 0 0; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .amount { font-size: 20px; font-weight: bold; margin-top: 8px; }
+    .green { color: #13834e; }
+    .red { color: #c13f43; }
+
+    h2 { font-size: 19px; }
+    label { display: block; font-size: 14px; margin: 12px 0 6px; }
+
+    input, select, button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 9px;
+      font-size: 16px;
+    }
+
+    input, select {
+      border: 1px solid #d6e0da;
+      background: white;
+      color: #19342d;
+    }
+
+    button {
+      border: 0;
+      background: #176b53;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 14px;
+    }
+
+    button:active { opacity: .8; }
+
+    .transaction {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-top: 1px solid #e9eeeb;
+      padding: 13px 0;
+    }
+
+    .transaction p { margin: 4px 0; font-size: 13px; color: #65756d; }
+
+    .delete {
+      width: auto;
+      margin: 0;
+      padding: 8px 10px;
+      background: #fbeaea;
+      color: #a72e35;
+      font-size: 13px;
+    }
+
+    .empty { color: #718078; font-size: 14px; }
+    .note { font-size: 12px; color: #68776f; line-height: 1.5; }
+
+    @media (max-width: 360px) {
+      .grid { grid-template-columns: 1fr; }
+      .balance h2 { font-size: 26px; }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>Meu Controle</h1>
+    <p>Organize seu dinheiro com tranquilidade.</p>
+  </header>
+
+  <main>
+    <section class="card balance">
+      <small>Saldo registrado</small>
+      <h2 id="balance">R$ 0,00</h2>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <small>Receitas</small>
+        <div id="income" class="amount green">R$ 0,00</div>
+      </div>
+      <div class="card">
+        <small>Despesas</small>
+        <div id="expenses" class="amount red">R$ 0,00</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Nova movimentação</h2>
+
+      <form id="form">
+        <label for="description">Descrição</label>
+        <input id="description" maxlength="80"
+          placeholder="Ex.: Salário, mercado..." required>
+
+        <label for="type">Tipo</label>
+        <select id="type">
+          <option value="income">Receita</option>
+          <option value="expense">Despesa</option>
+        </select>
+
+        <label for="category">Categoria</label>
+        <select id="category">
+          <option>Salário</option>
+          <option>Moradia</option>
+          <option>Alimentação</option>
+          <option>Transporte</option>
+          <option>Saúde</option>
+          <option>Pets</option>
+          <option>Lazer</option>
+          <option>Dívidas</option>
+          <option>Outros</option>
+        </select>
+
+        <label for="value">Valor (R$)</label>
+        <input id="value" type="number" min="0.01"
+          step="0.01" placeholder="0,00" required>
+
+        <label for="date">Data</label>
+        <input id="date" type="date" required>
+
+        <button type="submit">Adicionar movimentação</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Histórico</h2>
+      <label for="month">Filtrar por mês</label>
+      <input id="month" type="month">
+      <div id="history"></div>
+    </section>
+
+    <section class="card">
+      <h2>Sobre seus dados</h2>
+      <p class="note">
+        Esta versão salva os lançamentos neste navegador.
+        Os dados não são sincronizados entre aparelhos.
+        Faça backups e não utilize dados financeiros reais
+        até implementar proteções adicionais.
+      </p>
+      <button id="export" type="button">Exportar backup CSV</button>
+    </section>
+  </main>
+
+  <script>
+    const KEY = "meuControleLancamentosV1";
+
+    let entries = [];
+
+    try {
+      entries = JSON.parse(localStorage.getItem(KEY) || "[]");
+      if (!Array.isArray(entries)) entries = [];
+    } catch {
+      entries = [];
+    }
+
+    const $ = id => document.getElementById(id);
+
+    const money = value => Number(value).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL"
+    });
+
+    function save() {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(entries));
+      } catch {
+        alert("Não foi possível salvar os dados neste navegador.");
+      }
+    }
+
+    function render() {
+      const month = $("month").value;
+      const visible = entries.filter(e =>
+        !month || e.date.startsWith(month)
+      );
+
+      const income = visible
+        .filter(e => e.type === "income")
+        .reduce((sum, e) => sum + e.value, 0);
+
+      const expenses = visible
+        .filter(e => e.type === "expense")
+        .reduce((sum, e) => sum + e.value, 0);
+
+      $("balance").textContent = money(income - expenses);
+      $("income").textContent = money(income);
+      $("expenses").textContent = money(expenses);
+
+      const history = $("history");
+      history.replaceChildren();
+
+      if (!visible.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty";
+        empty.textContent = "Nenhuma movimentação neste período.";
+        history.appendChild(empty);
+        return;
+      }
+
+      [...visible].reverse().forEach(e => {
+        const row = document.createElement("div");
+        row.className = "transaction";
+
+        const info = document.createElement("div");
+        const title = document.createElement("strong");
+        title.textContent = e.description;
+
+        const details = document.createElement("p");
+        details.textContent = `${e.category} • ${e.date}`;
+
+        const amount = document.createElement("div");
+        amount.className = e.type === "income" ? "green" : "red";
+        amount.textContent =
+          (e.type === "income" ? "+ " : "- ") + money(e.value);
+
+        const remove = document.createElement("button");
+        remove.className = "delete";
+        remove.textContent = "Excluir";
+        remove.type = "button";
+        remove.setAttribute("aria-label",
+          "Excluir " + e.description);
+
+        remove.addEventListener("click", () => {
+          if (confirm("Deseja excluir esta movimentação?")) {
+            entries = entries.filter(item => item.id !== e.id);
+            save();
+            render();
+          }
+        });
+
+        info.append(title, details);
+        row.append(info, amount, remove);
+        history.appendChild(row);
+      });
+    }
+
+    $("form").addEventListener("submit", event => {
+      event.preventDefault();
+
+      const description = $("description").value.trim();
+      const value = Number($("value").value);
+      const date = $("date").value;
+
+      if (!description || !Number.isFinite(value) ||
+          value <= 0 || !date) {
+        alert("Confira a descrição, o valor e a data.");
+        return;
+      }
+
+      entries.push({
+        id: Date.now().toString() + Math.random().toString(16).slice(2),
+        description,
+        type: $("type").value,
+        category: $("category").value,
+        value: Math.round(value * 100) / 100,
+        date
+      });
+
+      save();
+      $("month").value = date.slice(0, 7);
+      $("form").reset();
+      $("date").value = new Date().toLocaleDateString("en-CA");
+      render();
+    });
+
+    $("month").addEventListener("change", render);
+
+    $("export").addEventListener("click", () => {
+      const quote = value =>
+        '"' + String(value).replace(/"/g, '""') + '"';
+
+      const lines = [
+        ["Descricao", "Tipo", "Categoria", "Valor", "Data"],
+        ...entries.map(e => [
+          e.description, e.type, e.category,
+          e.value.toFixed(2), e.date
+        ])
+      ];
+
+      const csv = "\uFEFF" + lines.map(line =>
+        line.map(quote).join(";")
+      ).join("\r\n");
+
+      const blob = new Blob([csv], {
+        type: "text/csv;charset=utf-8;"
+      });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "meu-controle-backup.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    $("date").value = new Date().toLocaleDateString("en-CA");
+    $("month").value = new Date().toLocaleDateString("en-CA").slice(0, 7);
+    render();
+  </script>
+</body>
+</html>
